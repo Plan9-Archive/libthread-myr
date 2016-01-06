@@ -18,15 +18,24 @@ pkg thread =
 ;;
 
 const mkmtx = {
-	-> [._state = 0, ._sem=0]
+	-> [._state = 0]
 }
 
 const mtxlock = {mtx
-	/* if the old value was 0, we aren't contended */
+	if xcas(&mtx._state, 0, 1) == 0
+		-> void
+	;;
+
+	for var i = 0; i < 1000; i++
+		if xcas(&mtx._state, 0, 1) == 0
+			-> void
+		;;
+		sys.sleep(0)
+	;;
+
 	if xadd(&mtx._state, 1) == 0
 		-> void
 	;;
-	
 	while sys.semacquire(&mtx._sem, 1) < 0
 		/* interrupted; retry */
 	;;
@@ -38,10 +47,8 @@ const mtxtrylock = {mtx
 
 	
 const mtxunlock = {mtx
-	/* if we were the only thread waiting on the lock, there was no contention */
 	if xadd(&mtx._state, -1) == 1
 		-> void
 	;;
-
-	sys.semrelease(&mtx._sem, 1)
+	xchg(&mtx._state, 0)
 }
